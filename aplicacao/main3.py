@@ -5,9 +5,10 @@ import imutils
 import re
 import requests
 
-filename = './files/video.mp4'
-degrees = 270
-car_plate_text_length = 10
+filename = './files/placamercosul02.jpg'
+filename = './files/placamercosul01.png'
+degrees = -2
+car_plate_text_length = 7
 
 
 def image_transform(image):
@@ -16,7 +17,7 @@ def image_transform(image):
     return image
 
 
-def convert_to_black_white(image):
+def dilate_image(image):
     image = cv2.blur(image, (3, 3))
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray = cv2.bilateralFilter(gray, 7, 17, 17)
@@ -66,8 +67,7 @@ def extract_car_plate_text(car_plate):
 
     if len(car_plate_text) != car_plate_text_length:
 
-        _, thresh = cv2.threshold(car_plate, 120, 255, cv2.THRESH_BINARY)
-        cv2.imshow('img', thresh)
+        _, thresh = cv2.threshold(car_plate, 90, 255, cv2.THRESH_BINARY)
 
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (4,4))
         opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
@@ -77,34 +77,27 @@ def extract_car_plate_text(car_plate):
     return re.sub('[^A-Za-z0-9]+', '', car_plate_text)
 
 
-cap = cv2.VideoCapture(filename)
+try:
+    image = cv2.imread(filename)
 
-while cap.isOpened():
+    image = image_transform(image)
 
-    ret, frame = cap.read()
+    edged = dilate_image(image)
 
-    if ret == True:
+    screenContours = get_contours(edged, image)
 
-        try:
-            image = image_transform(frame)
+    car_plate = crop_car_plate(image, screenContours)
 
-            edged = convert_to_black_white(image)
+    car_plate_text = extract_car_plate_text(car_plate)            
 
-            screenContours = get_contours(edged, image)
+    if len(car_plate_text) != 0:
+        print('Placa: ' + car_plate_text)
 
-            car_plate = crop_car_plate(image, screenContours)
+    cv2.drawContours(image, [screenContours], -1, (0, 0, 255), 3)
+    cv2.imshow('image', image)
+    cv2.imshow('car plate', car_plate)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
-            car_plate_text = extract_car_plate_text(car_plate)            
-
-            if len(car_plate_text) != 0:
-                print('Placa: ' + car_plate_text)
-
-            cv2.drawContours(image, [screenContours], -1, (0, 0, 255), 3)
-            cv2.imshow('image', image)
-            cv2.imshow('car plate', car_plate)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-        except Exception as err:
-            print(err)
+except Exception as err:
+    print(err)

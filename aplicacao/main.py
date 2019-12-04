@@ -5,8 +5,9 @@ import imutils
 import re
 import requests
 
-webcam = True
-filename = './video.mp4'
+webcam = False
+filename = './files/video.mp4'
+degrees = 270
 
 
 def returnCarPlate(img_org):
@@ -25,7 +26,7 @@ def returnCarPlate(img_org):
     kernel = cv2.getStructuringElement(cv2.MORPH_DILATE, (7, 7))
     img_dil = cv2.dilate(img_edg, kernel, iterations=1)
 
-    (contours, hierarchye) = cv2.findContours(img_dil.copy(), 1, 2)
+    _, contours, _ = cv2.findContours(img_dil.copy(), 1, 2)
     cnts = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
 
     screenCnt = None
@@ -67,7 +68,7 @@ def returnCarPlate(img_org):
 
 def returnTextPlate(carPlateImg):
 
-    tess.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'
+    # tess.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'
     text = tess.image_to_string(carPlateImg, lang='eng')
 
     return re.sub('[^A-Z0-9]+', '', text)
@@ -85,14 +86,7 @@ def saveCarPlate(carPlateText):
     return False
 
 
-if webcam:
-    cap = cv2.VideoCapture(0)
-    degrees = 0
-else:
-    cap = cv2.VideoCapture(filename)
-    degrees = 270
-
-print("Application started")
+cap = cv2.VideoCapture(filename)
 
 while cap.isOpened():
 
@@ -109,9 +103,9 @@ while cap.isOpened():
             if carPlateImg is not None:
                 carPlateText = returnTextPlate(carPlateImg)
                 print(carPlateText)
-                saveCarPlate(carPlateText)
-            else:
-                print("Erro 02")
+
+                carPlateText = returnTextPlate(carPlateImg)
+                # saveCarPlate(carPlateText)
 
         except:
             print("Error")
