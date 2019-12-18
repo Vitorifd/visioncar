@@ -16,7 +16,7 @@ def log_create(request, car_plate):
     car = Car.objects.get(car_plate=car_plate)
 
     log = Log.objects.filter(car=car.id, departure_time=None)
-
+    
     if len(log) == 0:
       newLog = Log(car=car, entry_time=getCurrentDatetime())
       newLog.save()
@@ -40,6 +40,7 @@ def log_create(request, car_plate):
     })
 
   except Car.DoesNotExist:
+    print('No exists')
     return JsonResponse({ 'error': True })
 
 

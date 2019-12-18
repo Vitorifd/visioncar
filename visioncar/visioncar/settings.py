@@ -15,8 +15,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rangefilter',
     'visioncar',
-    'core',
+    'core.apps.CoreConfig',
 ]
 
 MIDDLEWARE = [

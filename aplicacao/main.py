@@ -4,111 +4,190 @@ import pytesseract as tess
 import imutils
 import re
 import requests
-
-webcam = False
-filename = './files/video.mp4'
-degrees = 270
+import sys
 
 
-def returnCarPlate(img_org):
+def image_transform(image, degrees):
+    image = imutils.rotate(image, degrees)
+    image = imutils.resize(image, height=300)
+    return image
 
-    size = np.shape(img_org)
-    if size[0] <= 776:
-        img_org = imutils.resize(img_org, 900)
 
-    img_org2 = img_org.copy()
-    img_bw = cv2.cvtColor(img_org, cv2.COLOR_BGR2GRAY)
+def dilate_image(image):
+    image = cv2.blur(image, (3, 3))
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.bilateralFilter(gray, 7, 17, 17)
+    edged = cv2.Canny(gray, 30, 200)
 
-    ret3, img_thr = cv2.threshold(img_bw, 125, 255, cv2.THRESH_BINARY)
+    return edged
 
-    img_edg = cv2.Canny(img_thr, 100, 200)
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_DILATE, (7, 7))
-    img_dil = cv2.dilate(img_edg, kernel, iterations=1)
+def get_contours(image, image_org):
+    contours = cv2.findContours(image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours = imutils.grab_contours(contours)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:20]
 
-    _, contours, _ = cv2.findContours(img_dil.copy(), 1, 2)
-    cnts = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
-
-    screenCnt = None
-
-    for c in cnts:
-        peri = cv2.arcLength(c, True)
-        approx = cv2.approxPolyDP(c, 0.02 * peri, True)
+    for contour in contours:
+        peri = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.035 * peri, True)
 
         if len(approx) == 4:
-            screenCnt = approx
-            break
+            return approx
 
-    if screenCnt is None:
-        return None
+    return None
 
-    mask = np.zeros(img_bw.shape, dtype=np.uint8)
-    roi_corners = np.array(screenCnt, dtype=np.int32)
-    ignore_mask_color = (255,)*1
 
-    cv2.fillPoly(mask, roi_corners, ignore_mask_color)
-    cv2.drawContours(img_org, [screenCnt], -40, (100, 255, 100), 9)
-
-    ys = [screenCnt[0, 0, 1], screenCnt[1, 0, 1],
-          screenCnt[2, 0, 1], screenCnt[3, 0, 1]]
-    xs = [screenCnt[0, 0, 0], screenCnt[1, 0, 0],
-          screenCnt[2, 0, 0], screenCnt[3, 0, 0]]
+def crop_car_plate(image, screenContours):
+    ys = [screenContours[0, 0, 1], screenContours[1, 0, 1],
+        screenContours[2, 0, 1], screenContours[3, 0, 1]]
+    xs = [screenContours[0, 0, 0], screenContours[1, 0, 0],
+        screenContours[2, 0, 0], screenContours[3, 0, 0]]
 
     ys_sorted_index = np.argsort(ys)
     xs_sorted_index = np.argsort(xs)
 
-    x1 = screenCnt[xs_sorted_index[0], 0, 0]
-    x2 = screenCnt[xs_sorted_index[3], 0, 0]
+    x1 = screenContours[xs_sorted_index[0], 0, 0]
+    x2 = screenContours[xs_sorted_index[3], 0, 0]
 
-    y1 = screenCnt[ys_sorted_index[0], 0, 1]
-    y2 = screenCnt[ys_sorted_index[3], 0, 1]
+    y1 = screenContours[ys_sorted_index[0], 0, 1]
+    y2 = screenContours[ys_sorted_index[3], 0, 1]
 
-    return img_org2[y1:y2, x1:x2]
-
-
-def returnTextPlate(carPlateImg):
-
-    # tess.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'
-    text = tess.image_to_string(carPlateImg, lang='eng')
-
-    return re.sub('[^A-Z0-9]+', '', text)
+    return image[y1:y2, x1:x2]
 
 
-def saveCarPlate(carPlateText):
+def extract_car_plate_text(car_plate, car_plate_text_length=7, rgb_min=90):
+    car_plate = cv2.cvtColor(car_plate, cv2.COLOR_BGR2GRAY)
+    car_plate = cv2.blur(car_plate, (3,3))
 
-    if carPlateText != '':
+    car_plate_text = tess.image_to_string(car_plate)
 
-        r = requests.post("http://localhost:8000/logs/" + carPlateText)
+    if len(car_plate_text) != car_plate_text_length:
 
-        if r.status_code == 200:
+        _, thresh = cv2.threshold(car_plate, rgb_min, 255, cv2.THRESH_BINARY)
+
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (4,4))
+        opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+
+        car_plate_text = tess.image_to_string(opening)
+
+    return re.sub('[^A-Za-z0-9]+', '', car_plate_text)
+
+
+def await_exit():
+    key = cv2.waitKey(0)
+
+    if key == ord('q'):
+        cv2.destroyAllWindows()
+    else:
+        await_exit()
+
+
+
+def saveCarPlate(car_plate_text):
+
+    if car_plate_text != '':
+
+        response = requests.post("http://localhost:8000/logs/" + car_plate_text + '/')
+
+        if response.status_code == 200:
             return True
 
     return False
 
 
-cap = cv2.VideoCapture(filename)
+def run_image(filename, degrees):
+  try:
+      image = cv2.imread(filename)
 
-while cap.isOpened():
+      image = image_transform(image, degrees)
 
-    ret, frame = cap.read()
+      edged = dilate_image(image)
 
-    if ret == True:
+      screenContours = get_contours(edged, image)
 
-        img = imutils.rotate(frame, degrees)
-        cv2.imshow('video', img)
+      car_plate = crop_car_plate(image, screenContours)
 
-        try:
-            carPlateImg = returnCarPlate(img)
+      car_plate_text = extract_car_plate_text(car_plate)            
 
-            if carPlateImg is not None:
-                carPlateText = returnTextPlate(carPlateImg)
-                print(carPlateText)
+      if len(car_plate_text) != 0:
+          print('Placa: ' + car_plate_text)
+          saveCarPlate(car_plate_text)
 
-                carPlateText = returnTextPlate(carPlateImg)
-                # saveCarPlate(carPlateText)
 
-        except:
-            print("Error")
+      cv2.drawContours(image, [screenContours], -1, (0, 0, 255), 3)
+      cv2.imshow('image', image)
+      cv2.imshow('car plate', car_plate)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+      await_exit()
+
+  except Exception as err:
+      print(err)
+
+
+def run_video(filename, degrees):
+    cap = cv2.VideoCapture(filename)
+
+    while cap.isOpened():
+
+        ret, frame = cap.read()
+
+        if ret == True:
+
+            try:
+                image = image_transform(frame, degrees)
+
+                edged = dilate_image(image)
+
+                screenContours = get_contours(edged, image)
+
+                car_plate = crop_car_plate(image, screenContours)
+
+                car_plate_text = extract_car_plate_text(car_plate, 10, 120)            
+
+                if len(car_plate_text) != 0:
+                    print('Placa: ' + car_plate_text)
+
+                cv2.drawContours(image, [screenContours], -1, (0, 0, 255), 3)
+                cv2.imshow('image', image)
+                cv2.imshow('car plate', car_plate)
+
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
+            except Exception as err:
+                print(err)
+
+
+def help_text():
+    print('=> Options:')
+    print(' - video (vd)')
+    print(' - carplate (cp)')
+    print(' - mercosul_carplate_00 (mc0)')
+    print(' - mercosul_carplate_01 (mc1)')
+    print(' - motocycle_carplate (mtc)')
+
+
+if len(sys.argv) == 1:
+    print('Please, inform the desired resource')
+    help_text()
+else:
+    resource = sys.argv[1]
+
+    if resource == 'video' or resource == 'vd':
+        run_video('./files/video.mp4', 270)
+
+    elif resource == 'carplate' or resource == 'cp':
+        run_image('./files/carplate.jpg', 0)
+
+    elif resource == 'mercosul_carplate_00' or resource == 'mc0':
+        run_image('./files/mercosul_carplate_00.jpg', 0)
+
+    elif resource == 'mercosul_carplate_01' or resource == 'mc1':
+        run_image('./files/mercosul_carplate_01.png', -2)
+
+    elif resource == 'mmotocycle_carplate' or resource == 'mtc':
+        run_image('./files/motocycle_carplate.jpg', 0)
+
+    else:
+        print('Invalid resource')
+        help_text()

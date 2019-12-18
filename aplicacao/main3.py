@@ -5,9 +5,13 @@ import imutils
 import re
 import requests
 
-filename = './files/placamercosul02.jpg'
-filename = './files/placamercosul01.png'
-degrees = -2
+
+filename = './files/mercosul_carplate_00.jpg'
+filename = './files/mercosul_carplate_01.jpg'
+filename = './files/motocycle_carplate.jpg'
+filename = './files/carplate.jpg'
+
+degrees = 0
 car_plate_text_length = 7
 
 
@@ -22,6 +26,7 @@ def dilate_image(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray = cv2.bilateralFilter(gray, 7, 17, 17)
     edged = cv2.Canny(gray, 30, 200)
+    cv2.imshow('ae', edged)
 
     return edged
 
@@ -62,6 +67,7 @@ def crop_car_plate(image, screenContours):
 def extract_car_plate_text(car_plate):
     car_plate = cv2.cvtColor(car_plate, cv2.COLOR_BGR2GRAY)
     car_plate = cv2.blur(car_plate, (3,3))
+    car_plate = cv2.bilateralFilter(car_plate, 7, 17, 17)
 
     car_plate_text = tess.image_to_string(car_plate)
 
@@ -71,11 +77,20 @@ def extract_car_plate_text(car_plate):
 
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (4,4))
         opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+        cv2.imshow('opening', opening)
 
         car_plate_text = tess.image_to_string(opening)
 
     return re.sub('[^A-Za-z0-9]+', '', car_plate_text)
 
+
+def await_exit():
+    key = cv2.waitKey(0)
+
+    if key == ord('q'):
+        cv2.destroyAllWindows()
+    else:
+        await_exit()
 
 try:
     image = cv2.imread(filename)
@@ -94,10 +109,10 @@ try:
         print('Placa: ' + car_plate_text)
 
     cv2.drawContours(image, [screenContours], -1, (0, 0, 255), 3)
-    cv2.imshow('image', image)
+    cv2.imshow('image 1', image)
     cv2.imshow('car plate', car_plate)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+
+    await_exit()
 
 except Exception as err:
     print(err)

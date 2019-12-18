@@ -1,0 +1,19 @@
+Primeiramente devem ser instalados:
+ - Python 2.7.15
+ - Python 3.6.92
+
+Em seguida, utilizando o pip, gerenciador de pacotes do python 2.7, deve-se instalar o seguinte pacote:
+ - cv2
+ - numpy
+ - pytesseract
+ - imutils
+ - requests
+
+Em seguida, utilizando o pip, gerenciador de pacotes do python 3.6, deve-se instalar o seguinte pacote:
+ - Django
+
+Para iniciar a aplicação, deve-se  executar o arquivo main.py utilizando o python
+Ex: python main.py
+
+Para iniciar o sistema web(visioncar), deve-se  executar o arquivo manage.py utilizando o python3, passando o argumento runserver
+Ex: python3 manage.py runserver

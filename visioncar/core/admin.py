@@ -1,4 +1,5 @@
 from django.contrib import admin
+from rangefilter.filter import DateTimeRangeFilter
 
 from .models import Owner, Car, Log
 
@@ -34,10 +35,15 @@ class LogAdmin(admin.ModelAdmin):
   list_display = ('entry_time', 'departure_time', 'car', 'get_owner', 'get_instituition')
   search_fields = (
     'car__owner__first_name',
+    'car__owner__last_name',
     'car__owner__instituition',
     'car__car_plate',
     'entry_time',
     'departure_time'
+  )
+  list_filter = (
+    ('entry_time', DateTimeRangeFilter),
+    ('departure_time', DateTimeRangeFilter),
   )
 
 
